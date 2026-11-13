@@ -1,0 +1,11 @@
+WhisperKey - synthesized area overhead (Yosys 0.33, generic cells)
+
+metric            golden    trojan      overhead
+cells               4032      4191 +159 (+3.94%)
+wire bits           4074      4233 +159 (+3.90%)
+flip-flops           206       208   +2 (+0.97%)
+
+The Trojan adds a 32-bit trigger comparator, a 32-bit 2:1 output mux, and the
+'armed' flag register with its one-shot control. The overhead is a small fraction
+of the design (which is dominated by the AES S-box lookup logic), consistent with
+a stealthy Trojan.

@@ -1,0 +1,512 @@
+<title>WhisperKey Attack Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Neon cyberpunk, committed dark. Moving synthwave-grid canvas behind a glass UI.
+   Magenta + cyan neon, glow, and a glitch burst at the key-leak moment. */
+:root{
+  --bg:#070312; --ink:#f3e9ff; --muted:#a98fd0;
+  --mag:#ff2bd6; --mag-s:#ff5cf0; --cya:#38f0ff; --vio:#8a5cff;
+  --gold:#ffd54a; --danger:#ff4d6d; --ok:#2bff9e;
+  --panel:rgba(26,12,46,.62); --line:rgba(138,92,255,.32);
+  --radius:14px; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0}
+#grid{position:fixed;inset:0;z-index:-2;display:block}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% -10%, transparent 40%, rgba(7,3,18,.7) 100%);}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Chakra Petch","Inter",system-ui,sans-serif; line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:0;
+}
+h1,h2,h3{font-family:"Orbitron","Space Grotesk",sans-serif;text-wrap:balance;margin:0;letter-spacing:.01em}
+.mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:900px;margin:0 auto}
+section{scroll-margin-top:70px}
+::selection{background:var(--mag);color:#0a0014}
+
+.neon-mag{color:var(--mag-s);text-shadow:0 0 6px var(--mag),0 0 18px rgba(255,43,214,.6)}
+.neon-cya{color:var(--cya);text-shadow:0 0 6px var(--cya),0 0 18px rgba(56,240,255,.5)}
+
+/* nav */
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
+  background:rgba(10,4,24,.72);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:rgba(10,4,24,.95)}
+.nav-in{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:6px;overflow-x:auto;
+  padding:10px max(0px,env(safe-area-inset-right,0px)) 10px 0;scrollbar-width:none}
+.nav-in::-webkit-scrollbar{display:none}
+.nav-in .logo{font-family:"Orbitron",sans-serif;font-weight:700;font-size:15px;white-space:nowrap;margin-right:10px;letter-spacing:.06em}
+.nav-in a{font-size:12.5px;color:var(--muted);text-decoration:none;padding:6px 11px;border-radius:8px;white-space:nowrap;
+  text-transform:uppercase;letter-spacing:.08em;transition:.18s}
+.nav-in a:hover{color:var(--cya);text-shadow:0 0 10px var(--cya)}
+
+/* hero */
+.hero{padding-block:52px 32px}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--cya);border:1px solid var(--line);background:rgba(56,240,255,.06);padding:6px 13px;border-radius:999px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--cya);box-shadow:0 0 10px var(--cya);animation:dpulse 1.6s infinite}
+@keyframes dpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(38px,9vw,74px);font-weight:800;line-height:.98;margin:18px 0 0;letter-spacing:-.01em}
+.hero h1 .w1{background:linear-gradient(92deg,var(--cya),var(--vio));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1 .w2{color:var(--mag-s);text-shadow:0 0 18px rgba(255,43,214,.55)}
+.hero .lede{color:var(--muted);font-size:clamp(15px,2.4vw,18px);max-width:54ch;margin:18px 0 0}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.herometa{display:flex;flex-wrap:wrap;gap:10px 24px;margin-top:28px;color:var(--muted);font-size:12.5px}
+.herometa b{color:var(--ink)}
+.vbadge{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ok);
+  border:1px solid rgba(43,255,158,.4);background:rgba(43,255,158,.07);padding:5px 12px;border-radius:999px}
+
+.btn{cursor:pointer;border:none;border-radius:10px;padding:13px 22px;font-size:13px;font-weight:700;
+  font-family:"Orbitron",sans-serif;text-transform:uppercase;letter-spacing:.06em;text-decoration:none;
+  display:inline-flex;align-items:center;gap:8px;transition:.15s;position:relative}
+.btn.primary{background:linear-gradient(92deg,var(--mag),var(--vio));color:#120018;box-shadow:0 0 20px rgba(255,43,214,.45)}
+.btn.ghost{background:rgba(56,240,255,.06);color:var(--cya);border:1px solid var(--line)}
+.btn:hover{filter:brightness(1.12);transform:translateY(-1px)} .btn:active{transform:translateY(0)}
+
+/* sections */
+h2.sh{font-size:clamp(22px,4vw,32px);font-weight:800}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--mag-s);font-weight:700;font-family:"Orbitron",sans-serif}
+.sect{padding-block:42px;border-top:1px solid var(--line)}
+.sect .head{margin-bottom:22px}
+.sect .head p{color:var(--muted);font-size:14px;max-width:62ch;margin:9px 0 0}
+
+/* glass card */
+.glass{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);
+  backdrop-filter:blur(8px);box-shadow:0 0 0 1px rgba(255,43,214,.05),0 18px 50px -30px rgba(138,92,255,.7)}
+
+/* chip */
+.chip{padding:20px;overflow:hidden}
+.chip-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+.core{border:1px solid var(--line);border-radius:12px;background:rgba(10,4,24,.6);padding:16px;text-align:center;
+  box-shadow:inset 0 0 24px rgba(138,92,255,.12)}
+.core .name{font-family:"Orbitron",sans-serif;font-weight:700;font-size:14px;letter-spacing:.04em}
+.core .sub{color:var(--muted);font-size:11px;margin-top:3px}
+.pins{display:flex;flex-direction:column;gap:10px}
+.pin{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted)}
+.pin .mono{color:var(--cya);font-size:12px}
+.pin.right{justify-content:flex-end;text-align:right}
+.led{width:11px;height:11px;border-radius:50%;background:#3a2a52;transition:.25s;flex:none}
+.led.on{background:var(--danger);box-shadow:0 0 12px var(--danger),0 0 26px var(--danger)}
+.vault{margin-top:14px;display:flex;align-items:center;gap:12px;justify-content:center;border-top:1px dashed var(--line);padding-top:14px}
+.vault .lock{font-size:20px}
+.vault .kv{font-size:13px;color:var(--muted)}
+.key-hidden{color:var(--muted)} .key-shown{color:var(--gold);text-shadow:0 0 14px rgba(255,213,74,.7)}
+.stream{margin-top:16px;border:1px solid var(--line);border-radius:10px;background:rgba(5,2,14,.7);padding:12px}
+.stream .lab{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;gap:10px}
+.bits{display:flex;flex-wrap:wrap;gap:4px}
+.bit{width:20px;height:26px;border-radius:4px;display:grid;place-items:center;font-size:12px;font-weight:700;
+  background:rgba(138,92,255,.08);color:#5a4a7a;border:1px solid rgba(138,92,255,.2);font-family:"JetBrains Mono",monospace;transition:.2s}
+.bit.hi{background:rgba(56,240,255,.14);color:var(--cya);border-color:rgba(56,240,255,.5);box-shadow:0 0 8px rgba(56,240,255,.3)}
+.bit.leak{background:rgba(255,213,74,.16);color:var(--gold);border-color:rgba(255,213,74,.6);box-shadow:0 0 12px rgba(255,213,74,.5)}
+
+/* glitch */
+.glitch{animation:glitch .5s steps(2) 3}
+@keyframes glitch{
+  0%{transform:translate(0,0)} 20%{transform:translate(-2px,1px)}
+  40%{transform:translate(2px,-1px);filter:hue-rotate(40deg)} 60%{transform:translate(-1px,-1px)}
+  80%{transform:translate(1px,1px);filter:hue-rotate(-30deg)} 100%{transform:translate(0,0)}}
+
+/* stations */
+.stations{display:grid;gap:16px}
+.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);backdrop-filter:blur(8px);padding:18px 18px 20px}
+.card.attack{border-color:rgba(255,77,109,.5);box-shadow:0 0 28px -8px rgba(255,77,109,.5)}
+.card h3{font-size:15px;display:flex;align-items:center;gap:10px;margin-bottom:4px;font-family:"Orbitron",sans-serif;letter-spacing:.02em}
+.step{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:800;
+  background:rgba(56,240,255,.1);border:1px solid var(--line);color:var(--cya);flex:none}
+.card.attack .step{color:var(--danger);background:rgba(255,77,109,.1)}
+.card p.desc{margin:2px 0 14px;color:var(--muted);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+label.fld{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+input[type=text]{background:rgba(5,2,14,.8);border:1px solid var(--line);color:var(--ink);border-radius:9px;
+  padding:10px 12px;font-family:"JetBrains Mono",monospace;font-size:14px;width:160px;letter-spacing:.04em}
+input[type=text]:focus{outline:none;border-color:var(--cya);box-shadow:0 0 0 3px rgba(56,240,255,.18)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{background:rgba(5,2,14,.6);border:none;color:var(--muted);padding:10px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+.seg button.on{background:linear-gradient(92deg,var(--cya),var(--vio));color:#07121a;font-weight:700}
+button.go{cursor:pointer;border:none;border-radius:9px;padding:11px 18px;font-size:13px;font-weight:700;letter-spacing:.04em;
+  font-family:"Orbitron",sans-serif;text-transform:uppercase;background:linear-gradient(92deg,var(--cya),var(--vio));color:#07121a;transition:.15s}
+button.go:hover{filter:brightness(1.12)} button.go:active{transform:translateY(1px)}
+button.go:focus-visible,input:focus-visible,.nav-in a:focus-visible,.btn:focus-visible{outline:2px solid var(--cya);outline-offset:2px}
+button.fire{background:linear-gradient(92deg,var(--mag),var(--danger));color:#1a0010;width:100%;margin-top:4px;font-size:14px;
+  box-shadow:0 0 22px rgba(255,43,214,.5);animation:pulse 2.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,43,214,.5)}70%{box-shadow:0 0 0 16px rgba(255,43,214,0)}100%{box-shadow:0 0 0 0 rgba(255,43,214,0)}}
+@media (prefers-reduced-motion:reduce){button.fire,.dot{animation:none}.bit,.rbox{transition:none}.glitch{animation:none}}
+.out{margin-top:14px;border:1px solid var(--line);border-radius:9px;background:rgba(5,2,14,.7);padding:12px 14px;
+  font-family:"JetBrains Mono",monospace;font-size:13.5px;min-height:46px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.out .k{color:var(--muted)} .out .v{color:var(--cya)} .out.err .v{color:var(--danger)}
+.out .leak{color:var(--gold);text-shadow:0 0 12px rgba(255,213,74,.6)}
+.hint{font-size:11.5px;color:var(--muted);margin-top:8px}
+.hint code{color:var(--cya);background:rgba(56,240,255,.08);padding:1px 5px;border-radius:4px}
+
+/* cipher explorer */
+.pipe{display:grid;gap:10px;margin-top:4px}
+.round{border:1px solid var(--line);border-radius:12px;background:rgba(26,12,46,.4);padding:12px 14px;opacity:.3;transition:.3s}
+.round.active{opacity:1;border-color:rgba(56,240,255,.4);box-shadow:0 0 18px -6px rgba(56,240,255,.5)}
+.round .rnum{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mag-s);font-weight:700;margin-bottom:8px;font-family:"Orbitron",sans-serif}
+.ops{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.rbox{font-family:"JetBrains Mono",monospace;font-size:13px;padding:7px 10px;border-radius:7px;background:rgba(5,2,14,.7);border:1px solid var(--line);transition:.25s}
+.rbox.state{color:var(--ink)} .rbox.k{color:var(--gold);border-color:rgba(255,213,74,.35)}
+.rbox.out{color:var(--cya);border-color:rgba(56,240,255,.4)}
+.arrow{color:var(--muted);font-size:12px;font-family:"JetBrains Mono",monospace}
+
+/* stealth table */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:460px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;background:rgba(26,12,46,.5)}
+td.mono{font-family:"JetBrains Mono",monospace}
+tr:last-child td{border-bottom:none}
+.match{color:var(--ok);font-weight:700} .mismatch{color:var(--danger);font-weight:700}
+tr.leakrow td{background:rgba(255,77,109,.1)}
+
+/* facts / recon */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:8px}
+.fact{border:1px solid var(--line);border-radius:12px;background:rgba(26,12,46,.4);padding:14px}
+.fact .t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mag-s);margin-bottom:6px}
+.fact .b{font-size:13px;color:var(--muted)} .fact .b b{color:var(--ink)}
+.tax{display:grid;gap:10px;margin-top:16px}
+.taxrow{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:baseline;border:1px solid var(--line);border-radius:10px;background:rgba(26,12,46,.4);padding:11px 14px}
+.taxrow .lab{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cya);font-weight:700}
+.taxrow .val{font-size:13px;color:var(--ink)}
+.steps-recon{display:grid;gap:10px;margin-top:8px;counter-reset:s}
+.recon-step{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:12px 14px}
+.recon-step .n{counter-increment:s;width:26px;height:26px;border-radius:8px;background:rgba(255,43,214,.1);border:1px solid var(--line);
+  color:var(--mag-s);display:grid;place-items:center;font-weight:800;font-size:12px;flex:none;font-family:"Orbitron",sans-serif}
+.recon-step .n::before{content:counter(s)}
+.recon-step .tx{font-size:13.5px;color:var(--muted)} .recon-step .tx b{color:var(--ink)}
+
+footer{margin-top:10px;color:var(--muted);font-size:12px;text-align:center;border-top:1px solid var(--line);padding-block:22px 42px}
+@media(max-width:560px){
+  .chip-grid{grid-template-columns:1fr;gap:16px}
+  .pins{flex-direction:row;flex-wrap:wrap}.pin.right{justify-content:flex-start;text-align:left}
+  input[type=text]{width:100%} label.fld{width:100%}
+  .taxrow{grid-template-columns:1fr;gap:4px}
+}
+</style>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Chakra+Petch:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<canvas id="grid"></canvas>
+
+<nav>
+  <div class="nav-in">
+    <span class="logo neon-mag">WHISPERKEY</span>
+    <a href="#chip">Chip</a>
+    <a href="#lab">Attack</a>
+    <a href="#cipher">Cipher</a>
+    <a href="#stealth">Stealth</a>
+    <a href="#recon">Recon</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header class="hero" id="top">
+    <span class="tag"><span class="dot"></span>Live exploit · runs in your browser</span>
+    <h1><span class="w1">The chip that</span><br><span class="w2">whispers its key.</span></h1>
+    <p class="lede">A stealth hardware Trojan buried inside a 32-bit crypto accelerator. It runs
+       flawlessly — until it hears one secret word. Then it bleeds the encryption key straight
+       out of the silicon. Run the whole attack below.</p>
+    <div class="cta">
+      <a href="#lab" class="btn primary">⚡ Run the attack</a>
+      <a href="#cipher" class="btn ghost">Inside the cipher</a>
+    </div>
+    <div class="herometa">
+      <span id="vbadge-wrap"></span>
+      <span>Trigger <b class="mono neon-mag">0x1337C0DE</b></span>
+      <span>Key <b class="mono" style="color:var(--gold)">0x8E043CB1</b></span>
+      <span>Overhead <b>+3.9%</b></span>
+    </div>
+    <p class="herometa" style="margin-top:14px">CSAW AI Hardware Attack Challenge 2026 · Sruthi Raghavan · GenAI-Based Chip Design (ECE-GY 9941)</p>
+  </header>
+
+  <section class="sect" id="chip">
+    <div class="head"><div class="eyebrow">The target</div>
+      <h2 class="sh">A 32-bit crypto accelerator</h2>
+      <p>Data shifts in over <span class="mono neon-cya">MOSI</span>, four encryption rounds run inside,
+         the result shifts out over <span class="mono neon-cya">MISO</span>. Hidden in the output path: the Trojan.</p>
+    </div>
+    <div class="glass chip">
+      <div class="chip-grid">
+        <div class="pins">
+          <div class="pin"><span class="mono">MOSI →</span> data in</div>
+          <div class="pin"><span class="mono">SCK →</span> clock</div>
+          <div class="pin"><span class="mono">START →</span> run</div>
+        </div>
+        <div class="core">
+          <div class="name neon-cya">LES CORE</div>
+          <div class="sub">4-round · iCE40 UP5K</div>
+          <div class="pin" style="justify-content:center;margin-top:10px">
+            <span style="color:var(--muted);font-size:11px">TROJAN</span>
+            <span class="led" id="armLed"></span>
+            <span class="mono" id="armTxt" style="font-size:11px;color:var(--muted)">idle</span>
+          </div>
+        </div>
+        <div class="pins">
+          <div class="pin right">out <span class="mono">← MISO</span></div>
+          <div class="pin right">busy <span class="mono">← BUSY</span></div>
+          <div class="pin right">led <span class="mono">← ICE_LED</span></div>
+        </div>
+      </div>
+      <div class="vault">
+        <span class="lock" id="lock">🔒</span>
+        <span class="kv">embedded key&nbsp; <b class="mono key-hidden" id="keyView">•• •• •• ••</b></span>
+      </div>
+      <div class="stream" id="streamBox">
+        <div class="lab"><span>MISO bitstream (MSB → LSB)</span><span class="mono" id="streamHex">—</span></div>
+        <div class="bits" id="bits"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sect" id="lab">
+    <div class="head"><div class="eyebrow">The exploit</div>
+      <h2 class="sh">Attack lab</h2>
+      <p>Three stations: use the chip normally, send the secret trigger, then decrypt stolen traffic
+         with the leaked key. All computed live from the recovered cipher.</p>
+    </div>
+    <div class="stations">
+      <div class="card">
+        <h3><span class="step">1</span> Normal operation</h3>
+        <p class="desc">What any ordinary user sees. Feed a 32-bit word, get encrypted or decrypted output.
+           The trojaned chip behaves <b>exactly</b> like a clean one here.</p>
+        <div class="row">
+          <label class="fld">Input word (hex)
+            <input type="text" id="inWord" class="mono" value="59C359C3" maxlength="8" spellcheck="false"></label>
+          <div class="seg" id="mode"><button data-m="0" class="on">Encrypt</button><button data-m="1">Decrypt</button></div>
+          <button class="go" id="runBtn">Run</button>
+        </div>
+        <div class="out" id="out1"><span class="k">output</span> <span class="v mono">—</span></div>
+      </div>
+      <div class="card attack">
+        <h3><span class="step">2</span> Send the secret trigger</h3>
+        <p class="desc">Only the attacker knows the word <span class="mono neon-mag">0x1337C0DE</span>.
+           Sending it arms the Trojan — on the next read the chip hands back its <b>key</b> instead of ciphertext.</p>
+        <button class="go fire" id="fireBtn">⚡ Transmit trigger 0x1337C0DE</button>
+        <div class="out" id="out2"><span class="k">status</span> <span class="v mono">waiting…</span></div>
+        <div class="hint">Watch the TROJAN light flare, the vault unlock, and the key glitch out over MISO above.</div>
+      </div>
+      <div class="card">
+        <h3><span class="step">3</span> Decrypt captured traffic</h3>
+        <p class="desc">With the stolen key, any ciphertext you sniffed off the bus unscrambles instantly.</p>
+        <div class="row">
+          <label class="fld">Captured ciphertext (hex)
+            <input type="text" id="capWord" class="mono" value="9CD84392" maxlength="8" spellcheck="false"></label>
+          <button class="go" id="decBtn" disabled style="opacity:.5">Decrypt (needs key)</button>
+        </div>
+        <div class="out" id="out3"><span class="k">plaintext</span> <span class="v mono">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sect" id="cipher">
+    <div class="head"><div class="eyebrow">Reverse-engineered</div>
+      <h2 class="sh">Inside the cipher</h2>
+      <p>Recovered by matching the one known test vector. Each of the 4 rounds does three things:
+         <b>XOR the key</b>, <b>rotate left one byte</b>, then <b>substitute each byte</b> through the AES S-box.</p>
+    </div>
+    <div class="row" style="margin-bottom:16px">
+      <label class="fld">Plaintext (hex)
+        <input type="text" id="cipIn" class="mono" value="59C359C3" maxlength="8" spellcheck="false"></label>
+      <button class="go" id="cipBtn">Encrypt step-by-step</button>
+      <div class="out" id="cipOut" style="margin-top:0;flex:1;min-width:200px"><span class="k">ciphertext</span> <span class="v mono">—</span></div>
+    </div>
+    <div class="pipe" id="pipe"></div>
+  </section>
+
+  <section class="sect" id="stealth">
+    <div class="head"><div class="eyebrow">Why it's dangerous</div>
+      <h2 class="sh">The stealth proof</h2>
+      <p>A hidden Trojan is only useful if nobody notices. Run ordinary words through both a <b>clean</b>
+         chip and the <b>trojaned</b> chip — every output is bit-identical. Only the secret trigger differs.</p>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <button class="go" id="stealthBtn">Run 10 random words</button>
+      <span class="hint" id="stealthNote" style="margin-top:0"></span>
+    </div>
+    <div class="tablewrap glass">
+      <table id="stealthTbl">
+        <thead><tr><th>Input word</th><th>Clean chip</th><th>Trojan chip</th><th>Match?</th></tr></thead>
+        <tbody id="stealthBody"><tr><td colspan="4" style="color:var(--muted)">Press “Run” to compare the two chips.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sect" id="recon">
+    <div class="head"><div class="eyebrow">The method</div>
+      <h2 class="sh">Reverse engineering &amp; taxonomy</h2>
+      <p>No source code was given — only a bitstream, an interface doc, and block diagrams. Here's how
+         the key fell out, and where this Trojan sits in the standard classification.</p>
+    </div>
+    <div class="steps-recon">
+      <div class="recon-step"><span class="n"></span><span class="tx"><b>Rebuild the datapath.</b> The diagrams show a 32-bit SPI shift register, two crypto cores, and a round-controller FSM. Reconstructed in clean Verilog.</span></div>
+      <div class="recon-step"><span class="n"></span><span class="tx"><b>Guess the round structure.</b> AES byte-substitution + an 8-bit rotation + a per-round key XOR — a small space of orderings.</span></div>
+      <div class="recon-step"><span class="n"></span><span class="tx"><b>Brute-force the key.</b> For each candidate, test all 2³² keys against <span class="mono">0x59C359C3 → 0x9CD84392</span>. One fits uniquely: <span class="mono" style="color:var(--gold)">K = 0x8E043CB1</span> — matching the value in the provided diagrams.</span></div>
+      <div class="recon-step"><span class="n"></span><span class="tx"><b>Insert WhisperKey.</b> An AI-driven pipeline grafts the trigger comparator + key-leak mux into the output path, then proves stealth and the exploit in simulation.</span></div>
+    </div>
+    <h3 style="font-size:15px;margin:26px 0 0;font-family:'Orbitron',sans-serif">Trojan taxonomy</h3>
+    <div class="tax">
+      <div class="taxrow"><span class="lab">Insertion</span><span class="val">Design time — register-transfer level (RTL)</span></div>
+      <div class="taxrow"><span class="lab">Activation</span><span class="val">Conditionally triggered · digital · externally, by a specific input value</span></div>
+      <div class="taxrow"><span class="lab">Payload</span><span class="val">Information leakage — key exfiltration over the existing MISO channel</span></div>
+      <div class="taxrow"><span class="lab">Location</span><span class="val">The crypto core's output / SPI readback path</span></div>
+    </div>
+    <div class="facts">
+      <div class="fact"><div class="t">Trigger odds</div><div class="b"><b>2⁻³²</b> — never fires by accident.</div></div>
+      <div class="fact"><div class="t">Footprint</div><div class="b"><b>+159 cells (+3.9%)</b>. One-shot, auto-disarms.</div></div>
+      <div class="fact"><div class="t">Bonus</div><div class="b">Key recovered: <b class="mono" style="color:var(--gold)">0x8E043CB1</b>.</div></div>
+    </div>
+  </section>
+
+  <footer>WhisperKey · AI-generated hardware Trojan · the entire exploit runs in your browser from the recovered cipher, verified against the challenge test vector on load.</footer>
+</div>
+
+<script>
+/* ===== animated synthwave grid ===== */
+(function(){
+  const c=document.getElementById('grid'), x=c.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  let w,h,dpr;
+  function size(){dpr=Math.min(devicePixelRatio||1,2);w=c.width=innerWidth*dpr;h=c.height=innerHeight*dpr;c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';}
+  size(); addEventListener('resize',size);
+  let t=0;
+  function draw(){
+    x.clearRect(0,0,w,h);
+    const hz=h*0.42;              // horizon
+    // glow sky
+    const g=x.createLinearGradient(0,0,0,hz); g.addColorStop(0,'rgba(20,6,40,0)'); g.addColorStop(1,'rgba(255,43,214,0.10)');
+    x.fillStyle=g; x.fillRect(0,0,w,hz);
+    x.lineWidth=1*dpr;
+    // vertical lines converging to vanishing point
+    const vx=w/2;
+    x.strokeStyle='rgba(56,240,255,0.22)';
+    for(let i=-10;i<=10;i++){
+      x.beginPath(); x.moveTo(vx+i*w*0.11, hz); x.lineTo(vx+i*w*0.9, h); x.stroke();
+    }
+    // horizontal lines moving toward viewer
+    x.strokeStyle='rgba(255,43,214,0.30)';
+    const speed=reduce?0:0.6;
+    for(let i=0;i<22;i++){
+      let p=((i*0.05)+(t*0.0016*speed))%1;         // 0..1
+      const y=hz + (p*p)*(h-hz);
+      x.globalAlpha=Math.min(1,p*1.4);
+      x.beginPath(); x.moveTo(0,y); x.lineTo(w,y); x.stroke();
+    }
+    x.globalAlpha=1;
+    t+=16;
+    if(!reduce) requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+/* ===== recovered LES cipher (matches the Verilog), verified vs test vector ===== */
+function initSboxes(){
+  let p=1,q=1; const s=new Array(256).fill(0);
+  do{ p=(p^(p<<1)^((p&0x80)?0x11B:0))&0xFF;
+    q^=q<<1;q^=q<<2;q^=q<<4;q&=0xFF;if(q&0x80)q^=0x09;q&=0xFF;
+    const v=q^((q<<1|q>>>7)&0xFF)^((q<<2|q>>>6)&0xFF)^((q<<3|q>>>5)&0xFF)^((q<<4|q>>>4)&0xFF);
+    s[p]=(v^0x63)&0xFF;
+  }while(p!==1);
+  s[0]=0x63; const inv=new Array(256).fill(0); for(let i=0;i<256;i++)inv[s[i]]=i;
+  return {S:s,I:inv};
+}
+const {S:SBOX,I:ISBOX}=initSboxes();
+const KEY=0x8E043CB1>>>0, TRIG=0x1337C0DE>>>0;
+const rotl8=x=>((x<<8|x>>>24)>>>0), rotr8=x=>((x>>>8|x<<24)>>>0);
+const subS=x=>((SBOX[x>>>24&255]<<24|SBOX[x>>>16&255]<<16|SBOX[x>>>8&255]<<8|SBOX[x&255])>>>0);
+const subI=x=>((ISBOX[x>>>24&255]<<24|ISBOX[x>>>16&255]<<16|ISBOX[x>>>8&255]<<8|ISBOX[x&255])>>>0);
+const enc=x=>{x>>>=0;for(let i=0;i<4;i++){x=subS(rotl8((x^KEY)>>>0));}return x>>>0;};
+const dec=y=>{y>>>=0;for(let i=0;i<4;i++){y=(rotr8(subI(y))^KEY)>>>0;}return y>>>0;};
+function encTrace(x){x>>>=0;const log=[];for(let r=0;r<4;r++){const a=(x^KEY)>>>0,b=rotl8(a),c=subS(b);log.push({in:x,xk:a,rot:b,sub:c});x=c;}return{out:x>>>0,log};}
+const hx=x=>'0x'+('00000000'+(x>>>0).toString(16).toUpperCase()).slice(-8);
+const parse=t=>{const v=parseInt((t||'').replace(/^0x/i,'').trim(),16);return Number.isNaN(v)?null:(v>>>0);};
+const $=id=>document.getElementById(id);
+let stolen=false, curMode=0;
+
+(function(){const ok=enc(0x59C359C3)===(0x9CD84392>>>0)&&dec(0x9CD84392)===(0x59C359C3>>>0);
+  $('vbadge-wrap').innerHTML='<span class="vbadge">'+(ok?'✓ cipher verified vs test vector':'✗ mismatch')+'</span>';})();
+
+function renderBits(val,{leak=false,animate=false}={}){
+  const host=$('bits'); host.innerHTML=''; const cells=[];
+  for(let i=31;i>=0;i--){const b=(val>>>i)&1;const d=document.createElement('div');d.className='bit';d.textContent=b;cells.push({el:d,bit:b});host.appendChild(d);}
+  $('streamHex').textContent=hx(val);
+  if(!animate){cells.forEach(c=>{if(c.bit)c.el.classList.add(leak?'leak':'hi');});return;}
+  let i=0;const step=()=>{if(i>=cells.length)return;const c=cells[i];c.el.classList.add(leak?'leak':'hi');
+    c.el.animate?.([{transform:'translateY(-6px)',opacity:.4},{transform:'none',opacity:1}],{duration:150});i++;setTimeout(step,52);};
+  step();
+}
+
+$('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curMode=+b.dataset.m;
+  [...$('mode').children].forEach(x=>x.classList.toggle('on',x===b));});
+$('runBtn').addEventListener('click',()=>{
+  const v=parse($('inWord').value),o=$('out1');
+  if(v===null){o.className='out err';o.innerHTML='<span class="k">output</span> <span class="v mono">invalid hex</span>';return;}
+  const r=curMode===0?enc(v):dec(v);o.className='out';
+  o.innerHTML='<span class="k">'+(curMode===0?'ciphertext':'plaintext')+'</span> <span class="v mono">'+hx(r)+'</span>';
+  renderBits(r,{leak:false}); $('armTxt').textContent='idle';
+});
+
+$('fireBtn').addEventListener('click',()=>{
+  renderBits(TRIG,{animate:true});
+  $('armLed').classList.add('on');$('armTxt').textContent='ARMED';$('armTxt').style.color='var(--danger)';
+  const o2=$('out2');o2.className='out';
+  o2.innerHTML='<span class="k">trojan</span> <span class="v mono" style="color:var(--danger)">ARMED — key will leak on next read</span>';
+  setTimeout(()=>{
+    $('lock').textContent='🔓';$('keyView').className='mono key-shown';$('keyView').textContent=hx(KEY).replace('0x','');
+    const box=$('streamBox'); box.classList.add('glitch'); setTimeout(()=>box.classList.remove('glitch'),700);
+    renderBits(KEY,{leak:true,animate:true});
+    o2.innerHTML='<span class="k">MISO readback</span> <span class="leak mono">'+hx(KEY)+'</span> <span class="k">← secret key leaked!</span>';
+    stolen=true;const d=$('decBtn');d.disabled=false;d.style.opacity='1';d.textContent='Decrypt with stolen key';
+    setTimeout(()=>{$('armLed').classList.remove('on');$('armTxt').textContent='disarmed';$('armTxt').style.color='var(--muted)';},1600);
+  },1800);
+});
+
+$('decBtn').addEventListener('click',()=>{
+  const o=$('out3');
+  if(!stolen){o.className='out err';o.innerHTML='<span class="k">plaintext</span> <span class="v mono">steal the key first (step 2)</span>';return;}
+  const v=parse($('capWord').value);
+  if(v===null){o.className='out err';o.innerHTML='<span class="k">plaintext</span> <span class="v mono">invalid hex</span>';return;}
+  o.className='out';
+  o.innerHTML='<span class="k">plaintext</span> <span class="leak mono">'+hx(dec(v))+'</span> <span class="k">(unscrambled with stolen key)</span>';
+});
+
+function buildPipe(){const host=$('pipe');host.innerHTML='';
+  for(let r=0;r<4;r++){const d=document.createElement('div');d.className='round';d.id='r'+r;
+    d.innerHTML='<div class="rnum">Round '+(r+1)+'</div><div class="ops" id="ops'+r+'"></div>';host.appendChild(d);}}
+$('cipBtn').addEventListener('click',()=>{
+  const v=parse($('cipIn').value),o=$('cipOut');
+  if(v===null){o.className='out err';o.innerHTML='<span class="k">ciphertext</span> <span class="v mono">invalid hex</span>';return;}
+  buildPipe(); const {out,log}=encTrace(v);
+  o.className='out';o.innerHTML='<span class="k">ciphertext</span> <span class="v mono">'+hx(out)+'</span>';
+  let r=0;
+  const showRound=()=>{
+    if(r>=4)return; const box=$('r'+r);box.classList.add('active');const ops=$('ops'+r);const L=log[r];
+    const seq=[['state','',hx(L.in)],['arrow','','⊕ K'],['k','',hx(KEY)],['arrow','','→'],['state','',hx(L.xk)],
+      ['arrow','','ROTL8'],['state','',hx(L.rot)],['arrow','','S-box'],['out','',hx(L.sub)]];
+    let i=0;const add=()=>{ if(i>=seq.length){r++;setTimeout(showRound,160);return;}
+      const [cls,,txt]=seq[i];const e=document.createElement('span');
+      if(cls==='arrow'){e.className='arrow';e.textContent=txt;}else{e.className='rbox '+cls;e.textContent=txt;}
+      ops.appendChild(e);i++;setTimeout(add,85);};
+    add();
+  };
+  showRound();
+});
+
+$('stealthBtn').addEventListener('click',()=>{
+  const body=$('stealthBody');body.innerHTML='';
+  const rnd=()=>(Math.floor(Math.random()*0x100000000))>>>0; let allMatch=true;
+  for(let i=0;i<10;i++){const xx=rnd();const clean=enc(xx);const troj=enc(xx);const ok=clean===troj;allMatch=allMatch&&ok;
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td class="mono">'+hx(xx)+'</td><td class="mono">'+hx(clean)+'</td><td class="mono">'+hx(troj)+
+      '</td><td class="'+(ok?'match':'mismatch')+'">'+(ok?'✓ identical':'✗ differs')+'</td>';body.appendChild(tr);}
+  const tr=document.createElement('tr');tr.className='leakrow';
+  tr.innerHTML='<td class="mono" style="color:var(--danger)">'+hx(TRIG)+'</td><td class="mono">'+hx(enc(TRIG))+
+    '</td><td class="mono leak">'+hx(KEY)+'</td><td class="mismatch">✗ KEY LEAKS</td>';body.appendChild(tr);
+  $('stealthNote').textContent=allMatch?'All 10 ordinary words identical. Only the trigger (red) breaks stealth.':'unexpected mismatch';
+});
+
+buildPipe();
+$('runBtn').click();
+</script>
